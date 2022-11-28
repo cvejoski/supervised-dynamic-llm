@@ -1,0 +1,24 @@
+numpy
+scipy
+pandas
+tqdm
+click
+ipython
+matplotlib
+ipympl # interactive matplotlib plots
+seaborn
+tensorboard
+
+torch
+
+black
+gdown
+jupyterlab
+pytest
+pytest-cov
+tox
+pre_commit
+nbdime
+nbstripout
+sphinx
+recommonmark
