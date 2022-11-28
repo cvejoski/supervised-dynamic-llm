@@ -1,0 +1,85 @@
+name: mlp_arxiv
+num_runs: 1
+num_workers: 0
+world_size: 1 #4 num_GPU
+distributed: false #true
+gpus: !!python/tuple ["0"] # ["0", "1", "2", "3"]
+seed: 1
+
+model:
+  module: supervisedllm.models.baseline_models
+  name: NonSequentialClassifier
+  args:
+    bow_layers_dim: !!python/tuple [64, 64]
+    output_layers_dim: !!python/tuple [32, 32]
+data_loader:
+  module: supervisedllm.data.dataloaders
+  name: TopicDataLoader
+  args:
+    root_dir: ./data/preprocessed/arxiv
+    is_dynamic: true
+    use_covariates: false
+    use_tmp_covariates: false
+    reward_field: reward # reward_normalized
+    transformer_name: null # bert, albert, roberta
+    batch_size: 32 #32 #8
+    validation_batch_size: 32
+    n_workers: 4
+    pin_memory: true
+
+optimizer:
+  min_lr_rate: 1e-14 # used for early stopping
+  gradient_norm_clipping: 1.0
+  module: torch.optim
+  name: SGD #Adam
+  args:
+    lr: 0.001
+#    momentum: 0.0 #0.9
+#    weight_decay: 0.0005
+
+trainer:
+  module: supervisedllm.trainer
+  name: BaseTrainingProcedure
+  args:
+    bm_metric: accuracy
+    save_after_epoch: 1
+    eval_test: false
+    lr_schedulers: !!python/tuple
+      - optimizer: # name of the optimizer
+          counter: 1 # anneal lr rate if there is no improvement after n steps
+          module: torch.optim.lr_scheduler
+          name: StepLR # StepLR or MultiStepLR
+          args:
+            step_size: 3 # for StepLR
+            gamma: 0.2
+    schedulers: !!python/tuple
+      - module: supervisedllm.utils.param_scheduler
+        name: ExponentialScheduler
+        label: beta_scheduler
+        args:
+          max_value: 1.0
+          max_steps: 5000
+          decay_rate: 0.0025
+  epochs: 18 #4 #30 #20
+  save_dir: ./results/saved/
+  logging:
+    logged_train_stats:
+      !!python/tuple [
+        "loss",
+        "accuracy"
+      ]
+    logged_val_stats:
+      !!python/tuple [
+        "loss",
+        "accuracy"
+      ]
+    logged_test_stats:
+      !!python/tuple [
+        "loss",
+        "accuracy"
+      ]
+    tensorboard_dir: ./results/logging/tensorboard/
+    logging_dir: ./results/logging/raw/
+    formatters:
+      verbose: "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s"
+      simple: "%(levelname)s %(asctime)s %(message)s"

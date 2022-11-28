@@ -7,6 +7,10 @@ ipython
 matplotlib
 ipympl # interactive matplotlib plots
 seaborn
+sklearn
+scikit-learn
+transformers
+sentencepiece
 tensorboard
 
 torch

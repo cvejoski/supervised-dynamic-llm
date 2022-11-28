@@ -20,12 +20,12 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-import kiwissenbase
-from kiwissenbase.models import AModel
-from kiwissenbase.utils.helper import (
+from supervisedllm.models import AModel
+from supervisedllm.utils.helper import (
     create_instance,
     expand_params,
     get_device,
+    get_model_default_parameters,
     load_params,
 )
 
@@ -48,7 +48,6 @@ _logger = logging.getLogger(__name__)
 @click.option("-nc", "--no-cuda", "no_cuda", is_flag=True, default=False)
 @click.option("-r", "--resume-training", "resume", is_flag=True, default=False, help="resume training from the last checkpoint")
 @click.option("-rf", "--resume-from", "resume_from", type=click.Path(exists=True), help="path to checkpoint.pth to resume from")
-@click.version_option(kiwissenbase.__version__)
 def main(cfg_path: Path, log_level: int, debug: bool, resume: bool, resume_from: str, no_cuda: bool):
     logging.basicConfig(
         stream=sys.stdout, level=log_level, datefmt="%Y-%m-%d %H:%M", format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -167,6 +166,8 @@ def train_params(params: dict, resume: bool, debug: bool = False, no_cuda: bool 
     _logger.info("Name of the Experiment: %s", params["name"])
     device = get_device(params, no_cuda=no_cuda)
     data_loader = create_instance("data_loader", params, device)
+    model_parameters = get_model_default_parameters(params["model"], data_loader)
+    params["model"]["args"] = model_parameters | params["model"]["args"]
     model = create_instance("model", params)
 
     # Optimizers

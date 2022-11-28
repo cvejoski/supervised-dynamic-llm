@@ -52,7 +52,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="git@github.com:cvejoski/supervised-dynamic-llm.git",
-    packages=setuptools.find_packages("src/"),
+    packages=setuptools.find_packages("src"),
     package_dir={"": "src"},
     classifiers=[],
     python_requires=">=3.10",

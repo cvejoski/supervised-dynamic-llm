@@ -1,14 +1,12 @@
 """All Deep Neural Models are implemented in this package."""
 from abc import ABC, abstractmethod
-from typing import Any, List
+from typing import Any
 
-import albumentations as A
 import numpy as np
 import torch
-from albumentations.pytorch import ToTensorV2
 from torch import nn
 
-from ..utils.helper import create_class_instance, create_instance
+from ..utils.helper import create_instance
 
 
 class AModel(nn.Module, ABC):
@@ -24,14 +22,9 @@ class AModel(nn.Module, ABC):
         transformations (dict, optional): List of transformations that are applied on the image
             before it is passed to the model. For example normalization.
 
-    .. note::
-        For the ``transformations``  argument we bind the `Albumentations`
-        library (<https://albumentations.ai/>). All the tranformations available there can be used here. In
-        order to create a transformation one has to pass a list of dictionary. Each dictonary in the list
-        corresponds to one transformation.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, model_name, **kwargs):
         super().__init__()
         if "metrics" in kwargs:
             metrics = create_instance("metrics", kwargs)
@@ -40,11 +33,7 @@ class AModel(nn.Module, ABC):
             self.metrics = metrics
         else:
             self.metrics = None
-        self.transformations = None
-        transformations = kwargs.get("transformations", None)
-
-        if transformations is not None:
-            self.transformations = self.build_transform(transformations)
+        self._model_name = model_name
 
     @abstractmethod
     def new_stats(self) -> dict:
@@ -112,41 +101,3 @@ class AModel(nn.Module, ABC):
             torch.Device:
         """
         return next(self.parameters()).device
-
-    def build_transform(self, input_transform_params: List[dict]) -> A.Compose:
-        """Build `Albumentation` transformation from a list of dictionaries.
-
-        Args:
-            input_transform_params (List[dict]): _description_
-
-        .. note:
-            If after transformation the bonding box is smaller than ``min_area`` or ``min_visibility``
-            it will be removed.
-
-        Returns:
-            A.Compose:
-
-        Example:
-
-        .. code-block:: python
-
-        transform = {
-            "transformations": [{
-                "module": "albumentations"
-                "name": ToFloat
-                "args": {
-                    "p": 1,
-                    "max_value": None
-                }
-            }]
-        }
-        """
-        sequence = []
-        for trans_parameters in input_transform_params:
-            module = trans_parameters["module"]
-            class_name = trans_parameters["name"]
-            args = trans_parameters["args"]
-            sequence.append(create_class_instance(module, class_name, args))
-        sequence.append(ToTensorV2())
-
-        return A.Compose(sequence)

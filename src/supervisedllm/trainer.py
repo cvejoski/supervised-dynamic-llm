@@ -103,7 +103,6 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
         self.batch_size: int = self.params["data_loader"]["args"]["batch_size"]
         self.bm_metric: str = self.params["trainer"]["args"]["bm_metric"]
         self.eval_test: bool = self.params["trainer"]["args"]["eval_test"]
-        self.iou_thresh: bool = self.params["trainer"]["args"]["iou_thresh"]
 
         self.logging_every = kwargs.pop("logging_every", 1)
         self.logged_train_stats = self.params["trainer"]["logging"]["logged_train_stats"]
@@ -128,12 +127,7 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
         self.n_test_batches: int = data_loader.n_test_batches
 
         self.global_step: int = 0
-        self.best_model = {
-            "train_loss": float("inf"),
-            "val_loss": float("inf"),
-            "train_metric": float("inf"),
-            "val_metric": float("inf"),
-        }
+        self.best_model = {"train_loss": float("inf"), "val_loss": float("inf"), "train_metric": float("inf"), "val_metric": float("inf")}
 
         self.train_logger = train_logger
         if resume:
@@ -210,12 +204,7 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
                     value["counter"] = value["default_counter"]
 
     def _check_early_stopping(self) -> bool:
-        cond = list(
-            filter(
-                lambda x: x["opt"].param_groups[0]["lr"] < float(x["min_lr_rate"]),
-                self.optimizer.values(),
-            )
-        )
+        cond = list(filter(lambda x: x["opt"].param_groups[0]["lr"] < float(x["min_lr_rate"]), self.optimizer.values()))
         return len(cond) != 0
 
     def _train_epoch(self, epoch: int) -> dict:
@@ -246,14 +235,7 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
         stats = self._recv_stats_across_nodes(stats)
 
         if self.global_step % self.logging_every == 0:
-            self._log_step(
-                "train",
-                epoch,
-                batch_idx,
-                self.data_loader.train_set_size,
-                stats,
-                self.logged_train_stats,
-            )
+            self._log_step("train", epoch, batch_idx, self.data_loader.train_set_size, stats, self.logged_train_stats)
         self.global_step += 1
 
         return stats
@@ -282,18 +264,11 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
         return epoch_stats
 
     def _validate_step(self, minibatch: dict, batch_idx: int, epoch: int, p_bar: tqdm) -> dict:
-        stats = self.model.validate_step(minibatch, self.iou_thresh)
+        stats = self.model.validate_step(minibatch)
         self._update_step_p_bar(p_bar, stats)
         stats = self._recv_stats_across_nodes(stats)  # for multiple GPUs
 
-        self._log_step(
-            "validate",
-            epoch,
-            batch_idx,
-            self.data_loader.val_set_size,
-            stats,
-            self.logged_val_stats,
-        )
+        self._log_step("validate", epoch, batch_idx, self.data_loader.val_set_size, stats, self.logged_val_stats)
 
         return stats
 
@@ -325,14 +300,7 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
         stats = self.model.validate_step(minibatch, self.iou_thresh)
         self._update_step_p_bar(p_bar, stats)
         stats = self._recv_stats_across_nodes(stats)
-        self._log_step(
-            "test",
-            epoch,
-            batch_idx,
-            self.data_loader.test_set_size,
-            stats,
-            self.logged_test_stats,
-        )
+        self._log_step("test", epoch, batch_idx, self.data_loader.test_set_size, stats, self.logged_test_stats)
 
         return stats
 
@@ -354,23 +322,9 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
 
     @staticmethod
     def _normalize_stats(n_batches: int, statistics: dict) -> dict:
-        suffix = ["_reasonable", "_small", "_occl", "_all"]
+
         for k, v in list(statistics.items()):
-            if k[:2] in ["fn", "fp", "n_"] and k[:4] != "fppi":  # check for "fn", "fp", "n_targets", "n_imgs"
-                statistics[k] = statistics[k]
-            elif k == "MR":
-                # "MR" means "MR_reasonable"
-                if str("n_targets" + suffix[0]) in list(statistics.keys()) and statistics["n_targets" + suffix[0]] != 0:
-                    statistics["MR"] = statistics["fn" + suffix[0]] / statistics["n_targets" + suffix[0]]
-            elif k[:3] == "MR_":
-                for suf in suffix:
-                    if str("n_targets" + suf) in list(statistics.keys()) and statistics["n_targets" + suf] != 0:
-                        statistics["MR" + suf] = statistics["fn" + suf] / statistics["n_targets" + suf]
-            elif k[:4] == "fppi":
-                for suf in suffix:
-                    if "n_imgs" in list(statistics.keys()) and statistics["n_imgs"] != 0:
-                        statistics["fppi" + suf] = statistics.get("fp" + suf, -100) / statistics["n_imgs"]
-            elif is_primitive(v):
+            if is_primitive(v):
                 statistics[k] /= n_batches
         return statistics
 
@@ -378,34 +332,14 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
     def _average_across_nodes(statistics: dict, world_size: int) -> dict:
         avg_stats = dict()
         for k, v in statistics.items():
-            if k[:2] in ["fn", "fp", "n_"]:
-                if not isinstance(v, tuple):
-                    dist.all_reduce(v, dist.ReduceOp.SUM)
-                    avg_stats[k] = v.item()
-                else:
-                    avg_stats[k] = v
-            elif k[:4] == "loss":
+            if k[:4] == "loss":
                 if not isinstance(v, tuple):
                     dist.all_reduce(v, dist.ReduceOp.SUM)
                     avg_stats[k] = v.item() / world_size
                 else:
                     avg_stats[k] = v
-            elif k == "MR" or k == "fppi":
-                avg_stats[k] = v.item()
-            elif k[:3] == "MR_" or k[:5] == "fppi_":
-                continue
             else:
                 avg_stats[k] = v
-
-        suffix = ["_reasonable", "_small", "_occlusion", "_all"]
-        for suf in suffix:
-            if ["fn" + suf] in list(avg_stats.keys()):
-                if suf == "_reasonable":
-                    avg_stats["MR"] = avg_stats["fn" + suf] / avg_stats["n_targets" + suf]
-
-                avg_stats["MR" + suf] = avg_stats["fn" + suf] / avg_stats["n_targets" + suf]
-                avg_stats["fppi" + suf] = avg_stats["fp" + suf] / avg_stats["n_imgs"]
-
         return avg_stats
 
     def _log_epoch(self, log_label: str, statistics: dict, logged_stats: list) -> None:
@@ -424,7 +358,7 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
     def _prepare_dirs(self) -> None:
         trainer_par = self.params["trainer"]
         start_time = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
-        name = self.params["name"] + "_IoU" + str(self.params["trainer"]["args"]["iou_thresh"])
+        name = self.params["name"]
         if len(name) > 200:
             name = "_".join([i if i.isdigit() else i[0:3] for i in name.split("_")])
         self.checkpoint_dir = os.path.join(trainer_par["save_dir"], name, start_time)
@@ -519,25 +453,10 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
 
         return logger
 
-    def _log_step(
-        self,
-        step_type: str,
-        epoch: int,
-        batch_idx: int,
-        data_len: int,
-        stats: dict,
-        logged_stats: list,
-    ) -> None:
+    def _log_step(self, step_type: str, epoch: int, batch_idx: int, data_len: int, stats: dict, logged_stats: list) -> None:
         if not self.is_rank_0:
             return None
-        log = self._build_raw_log_str(
-            f"{step_type} epoch",
-            batch_idx,
-            epoch,
-            stats,
-            float(data_len),
-            self.batch_size,
-        )
+        log = self._build_raw_log_str(f"{step_type} epoch", batch_idx, epoch, stats, float(data_len), self.batch_size)
         self.t_logger.info(log)
         for k, v in stats.items():
             if k in logged_stats:
@@ -545,14 +464,7 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
                     self.summary.add_scalar(f"{step_type}/batch/" + k, v, self.global_step)
 
     @staticmethod
-    def _build_raw_log_str(
-        prefix: str,
-        batch_idx: int,
-        epoch: int,
-        logs: dict,
-        data_len: float,
-        batch_size: int,
-    ):
+    def _build_raw_log_str(prefix: str, batch_idx: int, epoch: int, logs: dict, data_len: float, batch_size: int):
         sb = prefix + ": {} [{}/{} ({:.0%})]".format(
             epoch,
             batch_idx * batch_size,
@@ -571,13 +483,7 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
             self._update_best_model_flag(train_log, validate_log)
 
     def _update_p_bar(self, e_bar: tqdm, train_log: dict, validate_log: dict, test_log: dict) -> None:
-        # test_loss = f"test loss: {test_log['loss']:4.4g}, test {self.bm_metric}: {test_log[self.bm_metric]:4.4g}" if test_log is not None else ""
-        e_bar.set_postfix_str(
-            # f"train loss: {train_log['loss']:4.4g} train {self.bm_metric}: {train_log[self.bm_metric]:4.4g}, "
-            f"train loss: {train_log['loss']:4.4g}"
-            f"validation {self.bm_metric}: {validate_log[self.bm_metric]:4.4g}, "
-            # f"{test_loss}"
-        )
+        e_bar.set_postfix_str(f"train loss: {train_log['loss']:4.4g}" f"validation {self.bm_metric}: {validate_log[self.bm_metric]:4.4g}, ")
         e_bar.update()
 
     @staticmethod
@@ -594,8 +500,6 @@ class BaseTrainingProcedure(metaclass=ABCMeta):
 
     def _update_best_model_flag(self, train_log: dict, validate_log: dict) -> None:
         self.best_model["train_loss"] = train_log["loss"]
-        # self.best_model['val_loss'] = validate_log['loss']
-        # self.best_model['train_metric'] = train_log[self.bm_metric]
         self.best_model["val_metric"] = validate_log[self.bm_metric]
         self.best_model["name"] = self.params["name"]
 

@@ -1,7 +1,5 @@
-from .dataloaders import CaltechPedastrianDataLoader, CityPersonsDataLoader, EuroCityPersonsDataLoader, ADataLoader
+from .dataloaders import TopicDataLoader
 
 all_dataloaders = {
-    "caltech": CaltechPedastrianDataLoader,
-    "citypersons": CityPersonsDataLoader,
-    "eurocitypersons": EuroCityPersonsDataLoader,
+    "topicdataloader": TopicDataLoader,
 }

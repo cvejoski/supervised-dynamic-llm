@@ -6,11 +6,12 @@ from functools import reduce
 from importlib import import_module
 from logging import Logger
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Iterable, List, Optional
 
 import torch
 import yaml
 from torch.autograd import grad
+from typing_extensions import TypeVar
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,6 +71,24 @@ def get_static_method(module_name: str, class_name: str, method_name: str) -> Ca
     clazz = getattr(module, class_name)
     method = getattr(clazz, method_name)
     return method
+
+
+def get_model_default_parameters(parameters: dict, data_loader) -> Callable:
+    """Get default model parameters.
+
+    Args:
+        parameters (dict): model parameters
+        data_loader (ADataLoader): used to train the model
+
+    Returns:
+        Callable: static funciton
+    """
+    module_name = parameters["module"]
+    class_name = parameters["name"]
+    module = import_module(module_name)
+    clazz = getattr(module, class_name)
+    method = getattr(clazz, "get_parameters")
+    return method(data_loader)
 
 
 def load_params(path: str, logger: Logger) -> dict:
@@ -570,3 +589,33 @@ def load_training_dataloader(
     loader = create_instance("data_loader", params, device)
 
     return loader
+
+
+def iterable_to_str(iterable: Iterable) -> str:
+    return "'" + "', '".join([str(item) for item in iterable]) + "'"
+
+
+T = TypeVar("T", str, bytes)
+
+
+def verify_str_arg(value: T, arg: Optional[str] = None, valid_values: Optional[Iterable[T]] = None, custom_msg: Optional[str] = None) -> T:
+    if not isinstance(value, torch._six.string_classes):
+        if arg is None:
+            msg = "Expected type str, but got type {type}."
+        else:
+            msg = "Expected type str for argument {arg}, but got type {type}."
+        msg = msg.format(type=type(value), arg=arg)
+        raise ValueError(msg)
+
+    if valid_values is None:
+        return value
+
+    if value not in valid_values:
+        if custom_msg is not None:
+            msg = custom_msg
+        else:
+            msg = "Unknown value '{value}' for argument {arg}. Valid values are {{{valid_values}}}."
+            msg = msg.format(value=value, arg=arg, valid_values=iterable_to_str(valid_values))
+        raise ValueError(msg)
+
+    return value
