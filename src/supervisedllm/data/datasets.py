@@ -10,8 +10,8 @@ from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset
 from transformers import BertTokenizer
 
-Vocab = namedtuple("Vocab", "vocab, stoi, itos, word_count, vectors")
-Time = namedtuple("Time", "all_time, time2id, id2time")
+Vocab = namedtuple("Vocab","vocab,stoi, itos, word_count, vectors")
+Time = namedtuple("Time","all_time, time2id, id2time")
 
 
 class TopicDataset(Dataset):
@@ -257,7 +257,7 @@ class TopicDataset(Dataset):
             reward_per_year[d].append(rewards_one_hot[i])
         corpus_per_year_avg = [np.vstack(v).mean(0) for k, v in sorted(reward_per_year.items())]
 
-        return np.asarray(corpus_per_year_avg, dtype=np.float)
+        return np.asarray(corpus_per_year_avg, dtype=np.double)
 
     def discrete_reward(self):
         return True

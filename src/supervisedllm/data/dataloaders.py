@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from supervisedllm.utils.helper import iterable_to_str, verify_str_arg
 
-from .datasets import TopicDataset
+from supervisedllm.data.datasets import TopicDataset
 
 sampler = torch.utils.data.RandomSampler
 DistributedSampler = torch.utils.data.distributed.DistributedSampler
@@ -185,7 +185,6 @@ class ADataLoader(ABC):
             **kwargs,
         )
 
-
 class TopicDataLoader(ADataLoader):
     def __init__(self, device, rank: int = 0, world_size=-1, **kwargs):
         super().__init__(device, rank, world_size, **kwargs)
@@ -349,3 +348,13 @@ class TopicDataLoader(ADataLoader):
             tokenizer, add_special_tokens=True, truncation=True, padding="max_length", return_attention_mask=True, return_tensors="pt"
         )
         return tokenizer
+
+if __name__ == "__main__":
+    from supervisedllm import data_path
+    data_dir = data_path / "preprocessed" / "wallstreetsbets-score-weekly-medium"
+    dataloader_params = {"root_dir": data_dir,
+                         "batch_size": 32,
+                         "is_dynamic":True}
+    data_loader = TopicDataLoader("cpu", **dataloader_params)
+    databatch = next(data_loader.train.__iter__())
+    print(databatch.keys())
