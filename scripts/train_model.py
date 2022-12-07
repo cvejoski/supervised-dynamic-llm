@@ -29,6 +29,8 @@ from supervisedllm.utils.helper import (
     load_params,
 )
 
+from supervisedllm.utils.printing_plotting import *
+
 _logger = logging.getLogger(__name__)
 
 
@@ -56,8 +58,10 @@ def main(cfg_path: Path, log_level: int, debug: bool, resume: bool, resume_from:
     gs_params = expand_params(params)
     if resume_from is None and resume:
         resume_from = get_latest_checkpoint(params)
+    t_init = get_time()    
     train(debug, gs_params, params, resume_from, no_cuda)
-
+    t_end = get_time()
+    print(get_time(t_init,t_end))
 
 def train(debug: bool, gs_params: List[dict], params: dict, resume: bool, no_cuda: bool):
     """Train the model given parameters.
