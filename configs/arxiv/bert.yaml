@@ -61,7 +61,7 @@ trainer:
           max_value: 1.0
           max_steps: 5000
           decay_rate: 0.0025
-  epochs: 18 #4 #30 #20
+  epochs: 4 #4 #30 #20
   save_dir: ./results/saved/
   logging:
     logged_train_stats:
